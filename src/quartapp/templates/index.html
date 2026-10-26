@@ -45,6 +45,10 @@
                             <div class="toast-body message-content">
                                 <em class="typing-indicator">Typing...</em>
                             </div>
+                            <div class="toast-body message-sources border-top small d-none">
+                                <strong>Sources</strong>
+                                <ul class="mb-0 ps-3"></ul>
+                            </div>
                         </div>
                 </div>
             </template>
@@ -92,6 +96,7 @@
 
             const assistantTemplateClone = assistantTemplate.content.cloneNode(true);
             let messageDiv = assistantTemplateClone.querySelector(".message-content");
+            let sourcesDiv = assistantTemplateClone.querySelector(".message-sources");
             targetContainer.appendChild(assistantTemplateClone);
 
             messages.push({
@@ -118,7 +123,11 @@
                 }
 
                 let answer = "";
+                let sources = [];
                 for await (const chunk of readNDJSONStream(response.body)) {
+                    if (chunk.type === "sources") {
+                        sources = chunk.sources;
+                    }
                     if (chunk.type === "response.output_text.delta" && chunk.delta) {
                         // Clear out the DIV if its the first answer chunk we've received
                         if (answer == "") {
@@ -131,6 +140,16 @@
                     if (chunk.error) {
                         messageDiv.innerHTML = "Error: " + chunk.error;
                     }
+                }
+                // Show the sources under the answer, unless the model said the answer wasn't in them
+                if (sources.length > 0 && answer.trim() !== "I couldn't find that in the documents.") {
+                    const sourcesList = sourcesDiv.querySelector("ul");
+                    for (const source of sources) {
+                        const item = document.createElement("li");
+                        item.textContent = `${source.title} (${source.source})`;
+                        sourcesList.appendChild(item);
+                    }
+                    sourcesDiv.classList.remove("d-none");
                 }
                 messages.push({
                     type: "message",
