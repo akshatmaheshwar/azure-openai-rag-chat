@@ -1,3 +1,4 @@
+{"type": "sources", "sources": [{"title": "European Capitals", "source": "docs/test/capitals.md"}]}
 {"type": "response.output_text.delta", "delta": "The"}
 {"type": "response.output_text.delta", "delta": " capital"}
 {"type": "response.output_text.delta", "delta": " of"}
