@@ -9,6 +9,8 @@ param serviceName string = 'aca'
 param exists bool
 param openAiDeploymentName string
 param openAiEndpoint string
+param searchEndpoint string
+param searchIndexName string
 
 resource acaIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: identityName
@@ -23,6 +25,14 @@ var env = [
   {
     name: 'AZURE_OPENAI_ENDPOINT'
     value: openAiEndpoint
+  }
+  {
+    name: 'AZURE_SEARCH_ENDPOINT'
+    value: searchEndpoint
+  }
+  {
+    name: 'AZURE_SEARCH_INDEX'
+    value: searchIndexName
   }
   {
     name: 'RUNNING_IN_PRODUCTION'

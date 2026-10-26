@@ -52,6 +52,9 @@
       },
       "disableKeyBasedAuth": {
         "value": "${DISABLE_KEY_BASED_AUTH=true}"
+      },
+      "searchServiceSkuName": {
+        "value": "${AZURE_SEARCH_SERVICE_SKU=free}"
       }
     }
   }

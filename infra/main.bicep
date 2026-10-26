@@ -70,6 +70,11 @@ param createAzureOpenAi bool // Set in main.parameters.json
 @description('Azure OpenAI endpoint to use. If provided, no Azure OpenAI instance will be created.')
 param openAiEndpoint string = ''
 
+// Parameters for the Azure AI Search resource:
+@description('Azure AI Search tier. Only one free service is allowed per subscription.')
+@allowed([ 'free', 'basic' ])
+param searchServiceSkuName string = 'free'
+param searchIndexName string = 'policies'
 
 var resourceToken = toLower(uniqueString(subscription().id, name, location))
 var tags = { 'azd-env-name': name }
@@ -114,6 +119,18 @@ module openAi 'core/ai/cognitiveservices.bicep' = if (createAzureOpenAi) {
   }
 }
 
+module searchService 'core/search/search-services.bicep' = {
+  name: 'search-service'
+  scope: resourceGroup
+  params: {
+    name: '${prefix}-search'
+    location: location
+    tags: tags
+    sku: searchServiceSkuName
+    disableLocalAuth: true
+  }
+}
+
 module logAnalyticsWorkspace 'core/monitor/loganalytics.bicep' = {
   name: 'loganalytics'
   scope: resourceGroup
@@ -151,6 +168,8 @@ module aca 'aca.bicep' = {
     containerRegistryName: containerApps.outputs.registryName
     openAiDeploymentName: openAiDeploymentName
     openAiEndpoint: createAzureOpenAi ? openAi.outputs.endpoint : openAiEndpoint
+    searchEndpoint: searchService.outputs.endpoint
+    searchIndexName: searchIndexName
     exists: acaExists
   }
 }
@@ -177,6 +196,39 @@ module openAiRoleBackend 'core/security/role.bicep' = if (createAzureOpenAi) {
   }
 }
 
+// Search Index Data Reader: lets the app query the index
+module searchRoleBackend 'core/security/role.bicep' = {
+  scope: resourceGroup
+  name: 'search-role-backend'
+  params: {
+    principalId: aca.outputs.SERVICE_ACA_IDENTITY_PRINCIPAL_ID
+    roleDefinitionId: '1407120a-92aa-4202-b7e9-c0e197c71c8f'
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Search Index Data Contributor: lets the user upload documents with scripts/index_documents.py
+module searchIndexDataRoleUser 'core/security/role.bicep' = if (createRoleForUser) {
+  scope: resourceGroup
+  name: 'search-index-data-role-user'
+  params: {
+    principalId: principalId
+    roleDefinitionId: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
+    principalType: 'User'
+  }
+}
+
+// Search Service Contributor: lets the user create the index with scripts/index_documents.py
+module searchServiceRoleUser 'core/security/role.bicep' = if (createRoleForUser) {
+  scope: resourceGroup
+  name: 'search-service-role-user'
+  params: {
+    principalId: principalId
+    roleDefinitionId: '7ca78c08-252a-4471-8644-bb5ff32d4ba0'
+    principalType: 'User'
+  }
+}
+
 output AZURE_LOCATION string = location
 output AZURE_TENANT_ID string = tenant().tenantId
 
@@ -184,6 +236,9 @@ output AZURE_OPENAI_RESOURCE_GROUP string = openAiResourceGroup.name
 output AZURE_OPENAI_RESOURCE_NAME string = openAi.outputs.name
 output AZURE_OPENAI_CHAT_DEPLOYMENT string = openAiDeploymentName
 output AZURE_OPENAI_ENDPOINT string = createAzureOpenAi ? openAi.outputs.endpoint : openAiEndpoint
+
+output AZURE_SEARCH_ENDPOINT string = searchService.outputs.endpoint
+output AZURE_SEARCH_INDEX string = searchIndexName
 
 output SERVICE_ACA_IDENTITY_PRINCIPAL_ID string = aca.outputs.SERVICE_ACA_IDENTITY_PRINCIPAL_ID
 output SERVICE_ACA_NAME string = aca.outputs.SERVICE_ACA_NAME
