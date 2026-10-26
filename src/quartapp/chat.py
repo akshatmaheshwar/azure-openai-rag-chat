@@ -7,6 +7,7 @@ from azure.identity.aio import (
     ManagedIdentityCredential,
     get_bearer_token_provider,
 )
+from azure.search.documents.aio import SearchClient
 from openai import AsyncOpenAI
 from quart import (
     Blueprint,
@@ -18,6 +19,15 @@ from quart import (
 )
 
 bp = Blueprint("chat", __name__, template_folder="templates", static_folder="static")
+
+# Number of search results to include as sources in the prompt
+SEARCH_TOP = 3
+NO_RESULTS_MESSAGE = "I couldn't find that in the documents."
+GROUNDING_INSTRUCTIONS = (
+    "Answer the user's question using ONLY the sources below. "
+    "Name the sources you used by their title in square brackets, for example [Leave Policy]. "
+    f'If the sources do not contain the answer, reply exactly "{NO_RESULTS_MESSAGE}" and nothing else.'
+)
 
 
 @bp.before_app_serving
@@ -46,6 +56,10 @@ async def configure_openai():
         raise ValueError("AZURE_OPENAI_ENDPOINT is required for Azure OpenAI")
     if not os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT"):
         raise ValueError("AZURE_OPENAI_CHAT_DEPLOYMENT is required for Azure OpenAI")
+    search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT")
+    search_index = os.getenv("AZURE_SEARCH_INDEX")
+    if not search_endpoint or not search_index:
+        raise ValueError("AZURE_SEARCH_ENDPOINT and AZURE_SEARCH_INDEX are required for Azure AI Search")
 
     # Create the asynchronous OpenAI client against Azure's v1 endpoint.
     bp.azure_credential = azure_credential
@@ -56,11 +70,41 @@ async def configure_openai():
     # Set the model name to the Azure OpenAI model deployment name
     bp.openai_model = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT")
 
+    # Create the asynchronous Azure AI Search client with the same credential chain (no API keys)
+    bp.search_client = SearchClient(endpoint=search_endpoint, index_name=search_index, credential=azure_credential)
+
 
 @bp.after_app_serving
 async def shutdown_openai():
     await bp.openai_client.close()
+    await bp.search_client.close()
     await bp.azure_credential.close()
+
+
+def get_latest_user_text(request_input: list[dict]) -> str:
+    for message in reversed(request_input):
+        if message.get("role") == "user":
+            content = message.get("content")
+            if isinstance(content, str):
+                return content
+            return " ".join(part.get("text", "") for part in content if part.get("type") == "input_text")
+    return ""
+
+
+async def search_documents(query: str) -> list[dict]:
+    if not query.strip():
+        return []
+    results = await bp.search_client.search(
+        search_text=query, top=SEARCH_TOP, select=["id", "title", "content", "source"]
+    )
+    return [document async for document in results]
+
+
+def build_instructions(documents: list[dict]) -> str:
+    sources = "\n\n".join(
+        f"[{document['title']}] (source: {document['source']})\n{document['content']}" for document in documents
+    )
+    return f"{GROUNDING_INSTRUCTIONS}\n\nSources:\n\n{sources}"
 
 
 @bp.get("/")
@@ -75,9 +119,18 @@ async def chat_handler():
     @stream_with_context
     async def response_stream():
         try:
+            documents = await search_documents(get_latest_user_text(request_input))
+            sources = [{"title": document["title"], "source": document["source"]} for document in documents]
+            yield json.dumps({"type": "sources", "sources": sources}, ensure_ascii=False) + "\n"
+            if not documents:
+                # Don't call the model when there is nothing to ground the answer in
+                yield json.dumps({"type": "response.output_text.delta", "delta": NO_RESULTS_MESSAGE}) + "\n"
+                return
+
             async with bp.openai_client.responses.stream(
                 # Azure OpenAI takes the deployment name as the model name.
                 model=bp.openai_model,
+                instructions=build_instructions(documents),
                 input=request_input,
                 store=False,
             ) as openai_stream:
