@@ -45,7 +45,7 @@ param openAiResourceGroupName string = ''
   'switzerlandnorth'
   'uksouth'
   'westeurope'
-  'westu'
+  'westus'
   'westus3'
 ])
 @metadata({
@@ -181,7 +181,7 @@ output AZURE_LOCATION string = location
 output AZURE_TENANT_ID string = tenant().tenantId
 
 output AZURE_OPENAI_RESOURCE_GROUP string = openAiResourceGroup.name
-output AZURE_OPENAI_RESOURCE_NAME string = openAi.outputs.name
+output AZURE_OPENAI_RESOURCE_NAME string = createAzureOpenAi ? openAi.outputs.name : ''
 output AZURE_OPENAI_CHAT_DEPLOYMENT string = openAiDeploymentName
 output AZURE_OPENAI_ENDPOINT string = createAzureOpenAi ? openAi.outputs.endpoint : openAiEndpoint
 
