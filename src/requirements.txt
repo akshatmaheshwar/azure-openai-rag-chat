@@ -21,9 +21,13 @@ anyio==4.10.0
     #   watchfiles
 attrs==25.3.0
     # via aiohttp
-azure-core==1.35.1
-    # via azure-identity
+azure-core==1.41.0
+    # via
+    #   azure-identity
+    #   azure-search-documents
 azure-identity==1.25.0
+    # via quartapp (pyproject.toml)
+azure-search-documents==12.0.0
     # via quartapp (pyproject.toml)
 blinker==1.9.0
     # via
@@ -84,6 +88,8 @@ idna==3.10
     #   httpx
     #   requests
     #   yarl
+isodate==0.7.2
+    # via azure-search-documents
 itsdangerous==2.2.0
     # via
     #   flask
@@ -140,8 +146,6 @@ requests==2.32.5
     # via
     #   azure-core
     #   msal
-six==1.17.0
-    # via azure-core
 sniffio==1.3.1
     # via
     #   anyio
@@ -154,6 +158,7 @@ typing-extensions==4.15.0
     #   anyio
     #   azure-core
     #   azure-identity
+    #   azure-search-documents
     #   openai
     #   pydantic
     #   pydantic-core
