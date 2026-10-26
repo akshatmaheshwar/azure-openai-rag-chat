@@ -162,6 +162,48 @@ Assuming you've run the steps to [open the project](#getting-started) and the st
 
 This will start the app on port 50505, and you can access it at `http://localhost:50505`.
 
+## Answering from your documents
+
+The app answers questions from a set of documents instead of from the model's general knowledge. For each question it:
+
+1. Runs a keyword search in [Azure AI Search](https://learn.microsoft.com/azure/search/search-what-is-azure-search) using the latest user message.
+2. Sends the top 3 results to the model with instructions to answer **only** from those sources and to name them. If the sources don't contain the answer, the model is told to reply exactly "I couldn't find that in the documents."
+3. Streams the answer back, with the sources listed under it.
+
+If the search returns no results, the model isn't called at all and the app replies "I couldn't find that in the documents."
+
+The sample documents in [docs/policies](docs/policies/) are short policies for a fictional company, Larkspur & Finch Ltd. Try questions like "How many days of annual leave do I get?" or "What is the hotel limit in London?".
+
+### Indexing the documents
+
+`azd up` creates the search service, but the index starts empty. After deploying, create the index and upload the documents:
+
+1. Put the search settings in your `.env` file (see [Development server](#development-server)):
+
+    ```shell
+    azd env get-value AZURE_SEARCH_ENDPOINT
+    azd env get-value AZURE_SEARCH_INDEX
+    ```
+
+2. Run the indexing script, which signs in with your `azd auth login` account through `DefaultAzureCredential`:
+
+    ```shell
+    python scripts/index_documents.py
+    ```
+
+Run the script again after you add or change files in `docs/policies`. Role assignments can take a few minutes to apply, so if the script fails with a 403 error right after `azd up`, wait and try again.
+
+### Search configuration
+
+* **Tier:** the search service uses the Free tier by default. Only one Free search service is allowed per subscription, so if you already have one, switch to Basic before running `azd up`: `azd env set AZURE_SEARCH_SERVICE_SKU basic`.
+* **Authentication:** API keys are disabled on the search service. The app uses the same credential chain as for Azure OpenAI: its managed identity in Azure, and your `azd auth login` account locally.
+* **Roles:** the app's identity gets *Search Index Data Reader*. Your user account gets *Search Index Data Contributor* and *Search Service Contributor* so that you can create and fill the index. These roles are assigned at the resource group scope. Scoping them to the search service alone would be tighter.
+
+### Limitations
+
+* Each search uses only the latest user message, so follow-up questions such as "what about part-time staff?" may not find the right document.
+* Keyword search matches words, not meaning. It can return weak matches that share a word with the question, or miss documents that use different wording. The model is told to refuse if the sources don't contain the answer, but adding vector or semantic search would improve retrieval.
+
 ## Guidance
 
 ### Costs
@@ -176,13 +218,14 @@ You can try the [Azure pricing calculator](https://azure.com/e/2c1c821757c8420fa
 * Azure Container App: Consumption tier with 0.5 CPU, 1GiB memory/storage. Pricing is based on resource allocation, and each month allows for a certain amount of free usage. [Pricing](https://azure.microsoft.com/pricing/details/container-apps/)
 * Azure Container Registry: Basic tier. [Pricing](https://azure.microsoft.com/pricing/details/container-registry/)
 * Log analytics: Pay-as-you-go tier. Costs based on data ingested. [Pricing](https://azure.microsoft.com/pricing/details/monitor/)
+* Azure AI Search: Free tier by default (no cost), or Basic tier, which has a fixed hourly cost. [Pricing](https://azure.microsoft.com/pricing/details/search/)
 
 ⚠️ To avoid unnecessary costs, remember to take down your app if it's no longer in use,
 either by deleting the resource group in the Portal or running `azd down`.
 
 ### Security Guidelines
 
-This template uses [Managed Identity](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview) for authenticating to the Azure OpenAI service.
+This template uses [Managed Identity](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview) for authenticating to the Azure OpenAI service and Azure AI Search.
 
 Additionally, we have added a [GitHub Action](https://github.com/microsoft/security-devops-action) that scans the infrastructure-as-code files and generates a report containing any detected issues. To ensure continued best practices in your own repository, we recommend that anyone creating solutions based on our templates ensure that the [Github secret scanning](https://docs.github.com/code-security/secret-scanning/about-secret-scanning) setting is enabled.
 
