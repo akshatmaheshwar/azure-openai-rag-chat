@@ -168,7 +168,7 @@ The app answers questions from a set of documents instead of from the model's ge
 
 1. Runs a keyword search in [Azure AI Search](https://learn.microsoft.com/azure/search/search-what-is-azure-search) using the latest user message.
 2. Sends the top 3 results to the model with instructions to answer **only** from those sources and to name them. If the sources don't contain the answer, the model is told to reply exactly "I couldn't find that in the documents."
-3. Streams the answer back, with the sources listed under it.
+3. Streams the answer back. Under it, the app lists only the sources that the answer cites by title in square brackets, for example `[Leave Policy]`. If the answer doesn't cite any source this way, no sources list is shown.
 
 If the search returns no results, the model isn't called at all and the app replies "I couldn't find that in the documents."
 

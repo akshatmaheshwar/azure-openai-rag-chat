@@ -141,10 +141,11 @@
                         messageDiv.innerHTML = "Error: " + chunk.error;
                     }
                 }
-                // Show the sources under the answer, unless the model said the answer wasn't in them
-                if (sources.length > 0 && answer.trim() !== "I couldn't find that in the documents.") {
+                // Show only the sources the answer cites by title in square brackets, e.g. [Leave Policy]
+                const citedSources = sources.filter((source) => answer.includes(`[${source.title}]`));
+                if (citedSources.length > 0) {
                     const sourcesList = sourcesDiv.querySelector("ul");
-                    for (const source of sources) {
+                    for (const source of citedSources) {
                         const item = document.createElement("li");
                         item.textContent = `${source.title} (${source.source})`;
                         sourcesList.appendChild(item);
